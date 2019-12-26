@@ -1,0 +1,25 @@
+#spring:
+#  h2:
+#    console:
+#      enabled: true
+spring:
+  jpa:
+    database: POSTGRESQL
+#    show-sql: true
+    generate-ddl: true
+    properties:
+      hibernate:
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    hibernate:
+      ddl-auto: update
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fixthread
+    username: dbadmin
+    password: qwerty1
+logging:
+  level:
+#    org.hibernate.SQL: debug
+    ru.perm.v: debug
+
