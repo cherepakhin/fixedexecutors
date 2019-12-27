@@ -18,19 +18,17 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @SpringBootApplication
 public class FixedexecutorsApplication implements CommandLineRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(FixedexecutorsApplication.class);
+    static volatile Integer counter = 0;
     @Autowired
     XStream xstream;
-
     @Autowired
     ArticleRepository articleRepository;
 
@@ -40,6 +38,7 @@ public class FixedexecutorsApplication implements CommandLineRunner {
 
     /**
      * Получение Xml из файла
+     *
      * @param filePath - путь к файлу
      * @return - объект из xml
      */
@@ -50,8 +49,9 @@ public class FixedexecutorsApplication implements CommandLineRunner {
 
     /**
      * Запуск обработки в одном потоке
-     * @throws URISyntaxException
-     * @throws IOException
+     *
+     * @throws URISyntaxException - не найден uri
+     * @throws IOException        - ошибка доступа к файлу
      */
     private void runStream() throws URISyntaxException, IOException {
         logger.info("===================================");
@@ -75,7 +75,8 @@ public class FixedexecutorsApplication implements CommandLineRunner {
 
     /**
      * Подучение объекта из xml-файла асинхронно
-     * @param filePath - путь к файлу
+     *
+     * @param filePath  - путь к файлу
      * @param executors - executor
      * @return - объект из xml
      */
@@ -89,13 +90,17 @@ public class FixedexecutorsApplication implements CommandLineRunner {
 
     /**
      * Сохранение в базе асинхронно
+     *
      * @param articleXml - объект из xml
-     * @param executors - executor
+     * @param executors  - executor
      * @return - сохраненный объект
      */
     CompletableFuture<Article> saveArticle(ArticleXml articleXml, ExecutorService executors) {
         return CompletableFuture.supplyAsync(() -> {
 //            logger.info(articleXml.toString());
+            synchronized (this) {
+                logger.info(String.format("counter:%d", counter++));
+            }
             Article article = articleRepository.save(
                     new Article(null, articleXml.getTopic(), articleXml.getContent())
             );
@@ -110,10 +115,11 @@ public class FixedexecutorsApplication implements CommandLineRunner {
 
     /**
      * Запуск обработки во многих потоках асинхронно
-     * @throws URISyntaxException
-     * @throws IOException
+     *
+     * @throws URISyntaxException - неверный URI
+     * @throws IOException        - не наден файл
      */
-    private void runFixedExecutor() throws URISyntaxException, IOException, ExecutionException, InterruptedException {
+    private void runFixedExecutor() throws URISyntaxException, IOException {
         ExecutorService executorService = Executors.newFixedThreadPool(10);
         Instant start = Instant.now();
         Path pathXmls = Paths.get(getClass().getClassLoader()
@@ -129,14 +135,17 @@ public class FixedexecutorsApplication implements CommandLineRunner {
                 .collect(Collectors.toList());
         ;
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-                futureArticle.toArray(new CompletableFuture[futureArticle.size()])
+                futureArticle.toArray(new CompletableFuture[0])
         );
+//        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+//                futureArticle.toArray(new CompletableFuture[futureArticle.size()])
+//        );
         allFutures.join();
         executorService.shutdown();
         Instant end = Instant.now();
-        logger.info(String.format("Time:%d Articles:%d",
+        logger.info(String.format("Time:%d Articles:%d counter:%d",
                 Duration.between(start, end).toMillis(),
-                articleRepository.findAll().size()));
+                articleRepository.findAll().size(), counter));
     }
 
     @Override
